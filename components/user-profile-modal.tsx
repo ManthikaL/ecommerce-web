@@ -10,12 +10,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { User, X, LogOut, Settings, MapPin, CreditCard } from "lucide-react"
+import { User, X, LogOut, Settings, MapPin, CreditCard, AlertCircle } from "lucide-react"
 import { useAuth } from "@/context/auth-context"
 
 interface UserProfileModalProps {
   isOpen: boolean
   onClose: () => void
+}
+
+interface ValidationErrors {
+  name?: string
+  email?: string
+  age?: string
+  phone?: string
+  shippingAddress?: {
+    firstName?: string
+    lastName?: string
+    street?: string
+    city?: string
+    zipCode?: string
+  }
+  billingAddress?: {
+    firstName?: string
+    lastName?: string
+    street?: string
+    city?: string
+    zipCode?: string
+  }
 }
 
 export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
@@ -57,6 +78,7 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
   })
   const [error, setError] = useState("")
   const [isEditing, setIsEditing] = useState(false)
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({})
 
   // Initialize form data with user data when user is logged in
   useEffect(() => {
@@ -74,7 +96,167 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
     }
   }, [user])
 
+  // Validation functions
+  const validateName = (name: string): string | undefined => {
+    if (!name.trim()) return "Name is required"
+    if (!/^[a-zA-Z\s]+$/.test(name)) return "Name should only contain letters and spaces"
+    if (name.trim().length < 2) return "Name should be at least 2 characters long"
+    return undefined
+  }
+
+  const validateEmail = (email: string): string | undefined => {
+    if (!email.trim()) return "Email is required"
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) return "Please enter a valid email address (e.g., testmail@gmail.com)"
+    return undefined
+  }
+
+  const validateAge = (age: string): string | undefined => {
+    if (!age.trim()) return "Age is required"
+    const ageNum = Number.parseInt(age)
+    if (isNaN(ageNum)) return "Age must be a number"
+    if (ageNum < 18) return "You must be at least 18 years old"
+    if (ageNum > 120) return "Please enter a valid age"
+    return undefined
+  }
+
+  const validatePhone = (phone: string): string | undefined => {
+    if (!phone.trim()) return "Phone number is required"
+    if (!/^\d+$/.test(phone)) return "Phone number should only contain numbers"
+    if (phone.length !== 10) return "Phone number must be exactly 10 digits"
+    return undefined
+  }
+
+  const validateZipCode = (zipCode: string): string | undefined => {
+    if (!zipCode.trim()) return "ZIP code is required"
+    if (!/^\d{5}(-\d{4})?$/.test(zipCode)) return "Please enter a valid ZIP code (e.g., 12345 or 12345-6789)"
+    return undefined
+  }
+
+  const validateRequired = (value: string, fieldName: string): string | undefined => {
+    if (!value.trim()) return `${fieldName} is required`
+    return undefined
+  }
+
+  const validateAllFields = (): boolean => {
+    const errors: ValidationErrors = {}
+
+    // Personal info validation
+    const nameError = validateName(formData.name)
+    if (nameError) errors.name = nameError
+
+    const emailError = validateEmail(formData.email)
+    if (emailError) errors.email = emailError
+
+    const ageError = validateAge(formData.age)
+    if (ageError) errors.age = ageError
+
+    const phoneError = validatePhone(formData.phone)
+    if (phoneError) errors.phone = phoneError
+
+    // Shipping address validation
+    const shippingErrors: any = {}
+    const shippingFirstNameError = validateName(formData.shippingAddress.firstName)
+    if (shippingFirstNameError) shippingErrors.firstName = shippingFirstNameError
+
+    const shippingLastNameError = validateName(formData.shippingAddress.lastName)
+    if (shippingLastNameError) shippingErrors.lastName = shippingLastNameError
+
+    const shippingStreetError = validateRequired(formData.shippingAddress.street, "Street address")
+    if (shippingStreetError) shippingErrors.street = shippingStreetError
+
+    const shippingCityError = validateName(formData.shippingAddress.city)
+    if (shippingCityError) shippingErrors.city = shippingCityError
+
+    const shippingZipError = validateZipCode(formData.shippingAddress.zipCode)
+    if (shippingZipError) shippingErrors.zipCode = shippingZipError
+
+    if (Object.keys(shippingErrors).length > 0) {
+      errors.shippingAddress = shippingErrors
+    }
+
+    // Billing address validation
+    const billingErrors: any = {}
+    const billingFirstNameError = validateName(formData.billingAddress.firstName)
+    if (billingFirstNameError) billingErrors.firstName = billingFirstNameError
+
+    const billingLastNameError = validateName(formData.billingAddress.lastName)
+    if (billingLastNameError) billingErrors.lastName = billingLastNameError
+
+    const billingStreetError = validateRequired(formData.billingAddress.street, "Street address")
+    if (billingStreetError) billingErrors.street = billingStreetError
+
+    const billingCityError = validateName(formData.billingAddress.city)
+    if (billingCityError) billingErrors.city = billingCityError
+
+    const billingZipError = validateZipCode(formData.billingAddress.zipCode)
+    if (billingZipError) billingErrors.zipCode = billingZipError
+
+    if (Object.keys(billingErrors).length > 0) {
+      errors.billingAddress = billingErrors
+    }
+
+    setValidationErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
   const handleInputChange = (field: string, value: string | boolean) => {
+    // Clear validation error for this field when user starts typing
+    if (typeof value === "string") {
+      const newErrors = { ...validationErrors }
+      if (field.includes(".")) {
+        const [parent, child] = field.split(".")
+        if (newErrors[parent as keyof ValidationErrors]) {
+          delete (newErrors[parent as keyof ValidationErrors] as any)?.[child]
+          if (Object.keys(newErrors[parent as keyof ValidationErrors] || {}).length === 0) {
+            delete newErrors[parent as keyof ValidationErrors]
+          }
+        }
+      } else {
+        delete newErrors[field as keyof ValidationErrors]
+      }
+      setValidationErrors(newErrors)
+    }
+
+    // Handle special input restrictions
+    if (
+      field === "name" ||
+      field === "shippingAddress.firstName" ||
+      field === "shippingAddress.lastName" ||
+      field === "billingAddress.firstName" ||
+      field === "billingAddress.lastName" ||
+      field === "shippingAddress.city" ||
+      field === "billingAddress.city"
+    ) {
+      // Only allow letters and spaces
+      if (typeof value === "string" && !/^[a-zA-Z\s]*$/.test(value)) {
+        return
+      }
+    }
+
+    if (field === "phone") {
+      // Only allow numbers and limit to 10 digits
+      if (typeof value === "string") {
+        const numericValue = value.replace(/\D/g, "")
+        if (numericValue.length > 10) return
+        value = numericValue
+      }
+    }
+
+    if (field === "age") {
+      // Only allow numbers
+      if (typeof value === "string" && !/^\d*$/.test(value)) {
+        return
+      }
+    }
+
+    if (field === "shippingAddress.zipCode" || field === "billingAddress.zipCode") {
+      // Only allow numbers and hyphens for ZIP codes
+      if (typeof value === "string" && !/^[\d-]*$/.test(value)) {
+        return
+      }
+    }
+
     if (field.includes(".")) {
       const [parent, child] = field.split(".")
       setFormData((prev) => ({
@@ -93,6 +275,18 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
     e.preventDefault()
     setError("")
 
+    // Basic validation for login
+    if (!formData.email || !formData.password) {
+      setError("Please fill in all fields")
+      return
+    }
+
+    const emailError = validateEmail(formData.email)
+    if (emailError) {
+      setError(emailError)
+      return
+    }
+
     const success = await login(formData.email, formData.password)
     if (success) {
       onClose()
@@ -110,6 +304,17 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
       return
     }
 
+    // Validate registration fields
+    const nameError = validateName(formData.name)
+    const emailError = validateEmail(formData.email)
+    const ageError = formData.age ? validateAge(formData.age) : undefined
+    const phoneError = formData.phone ? validatePhone(formData.phone) : undefined
+
+    if (nameError || emailError || ageError || phoneError) {
+      setError(nameError || emailError || ageError || phoneError || "Please fix the validation errors")
+      return
+    }
+
     const success = await register({
       ...formData,
       age: Number.parseInt(formData.age) || 0,
@@ -124,11 +329,18 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
 
   const handleUpdateProfile = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
+
+    if (!validateAllFields()) {
+      setError("Please fix all validation errors before saving")
+      return
+    }
+
     updateProfile({
       ...formData,
       age: Number.parseInt(formData.age) || 0,
     })
     setIsEditing(false)
+    setError("")
   }
 
   const handleLogout = () => {
@@ -138,6 +350,8 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
 
   const startEditing = () => {
     setIsEditing(true)
+    setValidationErrors({})
+    setError("")
   }
 
   const cancelEditing = () => {
@@ -155,6 +369,18 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
       })
     }
     setIsEditing(false)
+    setValidationErrors({})
+    setError("")
+  }
+
+  const ErrorMessage = ({ error }: { error?: string }) => {
+    if (!error) return null
+    return (
+      <div className="flex items-center gap-1 text-sm text-destructive mt-1">
+        <AlertCircle className="h-3 w-3" />
+        <span>{error}</span>
+      </div>
+    )
   }
 
   if (!isOpen) return null
@@ -198,6 +424,13 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                 </div>
               </div>
 
+              {error && (
+                <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                  <AlertCircle className="h-4 w-4 text-destructive" />
+                  <span className="text-sm text-destructive">{error}</span>
+                </div>
+              )}
+
               <Tabs defaultValue="profile">
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="profile">Personal Info</TabsTrigger>
@@ -209,45 +442,59 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                   <form onSubmit={handleUpdateProfile} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="name">Full Name</Label>
+                        <Label htmlFor="name">Full Name *</Label>
                         <Input
                           id="name"
                           value={formData.name}
                           onChange={(e) => handleInputChange("name", e.target.value)}
                           disabled={!isEditing}
+                          className={validationErrors.name ? "border-destructive" : ""}
+                          placeholder="Enter your full name"
                         />
+                        <ErrorMessage error={validationErrors.name} />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
+                        <Label htmlFor="email">Email *</Label>
                         <Input
                           id="email"
                           type="email"
                           value={formData.email}
                           onChange={(e) => handleInputChange("email", e.target.value)}
                           disabled={!isEditing}
+                          className={validationErrors.email ? "border-destructive" : ""}
+                          placeholder="testmail@gmail.com"
                         />
+                        <ErrorMessage error={validationErrors.email} />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="age">Age</Label>
+                        <Label htmlFor="age">Age * (Must be 18+)</Label>
                         <Input
                           id="age"
-                          type="number"
+                          type="text"
                           value={formData.age}
                           onChange={(e) => handleInputChange("age", e.target.value)}
                           disabled={!isEditing}
+                          className={validationErrors.age ? "border-destructive" : ""}
+                          placeholder="Enter your age"
                         />
+                        <ErrorMessage error={validationErrors.age} />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="phone">Phone Number</Label>
+                        <Label htmlFor="phone">Phone Number * (10 digits)</Label>
                         <Input
                           id="phone"
+                          type="tel"
                           value={formData.phone}
                           onChange={(e) => handleInputChange("phone", e.target.value)}
                           disabled={!isEditing}
+                          className={validationErrors.phone ? "border-destructive" : ""}
+                          placeholder="1234567890"
+                          maxLength={10}
                         />
+                        <ErrorMessage error={validationErrors.phone} />
                       </div>
                     </div>
                   </form>
@@ -270,22 +517,26 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                     <div className="grid grid-cols-1 gap-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>First Name</Label>
+                          <Label>First Name *</Label>
                           <Input
                             placeholder="First Name"
                             value={formData.shippingAddress.firstName}
                             onChange={(e) => handleInputChange("shippingAddress.firstName", e.target.value)}
                             disabled={!isEditing}
+                            className={validationErrors.shippingAddress?.firstName ? "border-destructive" : ""}
                           />
+                          <ErrorMessage error={validationErrors.shippingAddress?.firstName} />
                         </div>
                         <div className="space-y-2">
-                          <Label>Last Name</Label>
+                          <Label>Last Name *</Label>
                           <Input
                             placeholder="Last Name"
                             value={formData.shippingAddress.lastName}
                             onChange={(e) => handleInputChange("shippingAddress.lastName", e.target.value)}
                             disabled={!isEditing}
+                            className={validationErrors.shippingAddress?.lastName ? "border-destructive" : ""}
                           />
+                          <ErrorMessage error={validationErrors.shippingAddress?.lastName} />
                         </div>
                       </div>
                       <div className="space-y-2">
@@ -298,13 +549,15 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Street Address</Label>
+                        <Label>Street Address *</Label>
                         <Input
                           placeholder="Street Address"
                           value={formData.shippingAddress.street}
                           onChange={(e) => handleInputChange("shippingAddress.street", e.target.value)}
                           disabled={!isEditing}
+                          className={validationErrors.shippingAddress?.street ? "border-destructive" : ""}
                         />
+                        <ErrorMessage error={validationErrors.shippingAddress?.street} />
                       </div>
                       <div className="space-y-2">
                         <Label>Apartment, suite, etc. (Optional)</Label>
@@ -317,16 +570,18 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>City</Label>
+                          <Label>City *</Label>
                           <Input
                             placeholder="City"
                             value={formData.shippingAddress.city}
                             onChange={(e) => handleInputChange("shippingAddress.city", e.target.value)}
                             disabled={!isEditing}
+                            className={validationErrors.shippingAddress?.city ? "border-destructive" : ""}
                           />
+                          <ErrorMessage error={validationErrors.shippingAddress?.city} />
                         </div>
                         <div className="space-y-2">
-                          <Label>State</Label>
+                          <Label>State *</Label>
                           <Select
                             value={formData.shippingAddress.state}
                             onValueChange={(value) => handleInputChange("shippingAddress.state", value)}
@@ -350,16 +605,18 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>ZIP Code</Label>
+                          <Label>ZIP Code *</Label>
                           <Input
-                            placeholder="ZIP Code"
+                            placeholder="12345 or 12345-6789"
                             value={formData.shippingAddress.zipCode}
                             onChange={(e) => handleInputChange("shippingAddress.zipCode", e.target.value)}
                             disabled={!isEditing}
+                            className={validationErrors.shippingAddress?.zipCode ? "border-destructive" : ""}
                           />
+                          <ErrorMessage error={validationErrors.shippingAddress?.zipCode} />
                         </div>
                         <div className="space-y-2">
-                          <Label>Country</Label>
+                          <Label>Country *</Label>
                           <Select
                             value={formData.shippingAddress.country}
                             onValueChange={(value) => handleInputChange("shippingAddress.country", value)}
@@ -389,22 +646,26 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                     <div className="grid grid-cols-1 gap-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>First Name</Label>
+                          <Label>First Name *</Label>
                           <Input
                             placeholder="First Name"
                             value={formData.billingAddress.firstName}
                             onChange={(e) => handleInputChange("billingAddress.firstName", e.target.value)}
                             disabled={!isEditing}
+                            className={validationErrors.billingAddress?.firstName ? "border-destructive" : ""}
                           />
+                          <ErrorMessage error={validationErrors.billingAddress?.firstName} />
                         </div>
                         <div className="space-y-2">
-                          <Label>Last Name</Label>
+                          <Label>Last Name *</Label>
                           <Input
                             placeholder="Last Name"
                             value={formData.billingAddress.lastName}
                             onChange={(e) => handleInputChange("billingAddress.lastName", e.target.value)}
                             disabled={!isEditing}
+                            className={validationErrors.billingAddress?.lastName ? "border-destructive" : ""}
                           />
+                          <ErrorMessage error={validationErrors.billingAddress?.lastName} />
                         </div>
                       </div>
                       <div className="space-y-2">
@@ -417,13 +678,15 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Street Address</Label>
+                        <Label>Street Address *</Label>
                         <Input
                           placeholder="Street Address"
                           value={formData.billingAddress.street}
                           onChange={(e) => handleInputChange("billingAddress.street", e.target.value)}
                           disabled={!isEditing}
+                          className={validationErrors.billingAddress?.street ? "border-destructive" : ""}
                         />
+                        <ErrorMessage error={validationErrors.billingAddress?.street} />
                       </div>
                       <div className="space-y-2">
                         <Label>Apartment, suite, etc. (Optional)</Label>
@@ -436,16 +699,18 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>City</Label>
+                          <Label>City *</Label>
                           <Input
                             placeholder="City"
                             value={formData.billingAddress.city}
                             onChange={(e) => handleInputChange("billingAddress.city", e.target.value)}
                             disabled={!isEditing}
+                            className={validationErrors.billingAddress?.city ? "border-destructive" : ""}
                           />
+                          <ErrorMessage error={validationErrors.billingAddress?.city} />
                         </div>
                         <div className="space-y-2">
-                          <Label>State</Label>
+                          <Label>State *</Label>
                           <Select
                             value={formData.billingAddress.state}
                             onValueChange={(value) => handleInputChange("billingAddress.state", value)}
@@ -469,16 +734,18 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>ZIP Code</Label>
+                          <Label>ZIP Code *</Label>
                           <Input
-                            placeholder="ZIP Code"
+                            placeholder="12345 or 12345-6789"
                             value={formData.billingAddress.zipCode}
                             onChange={(e) => handleInputChange("billingAddress.zipCode", e.target.value)}
                             disabled={!isEditing}
+                            className={validationErrors.billingAddress?.zipCode ? "border-destructive" : ""}
                           />
+                          <ErrorMessage error={validationErrors.billingAddress?.zipCode} />
                         </div>
                         <div className="space-y-2">
-                          <Label>Country</Label>
+                          <Label>Country *</Label>
                           <Select
                             value={formData.billingAddress.country}
                             onValueChange={(value) => handleInputChange("billingAddress.country", value)}
@@ -563,6 +830,7 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                       type="email"
                       value={formData.email}
                       onChange={(e) => handleInputChange("email", e.target.value)}
+                      placeholder="testmail@gmail.com"
                       required
                     />
                   </div>
@@ -576,7 +844,12 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                       required
                     />
                   </div>
-                  {error && <p className="text-sm text-destructive">{error}</p>}
+                  {error && (
+                    <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                      <span className="text-sm text-destructive">{error}</span>
+                    </div>
+                  )}
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Signing In..." : "Sign In"}
                   </Button>
@@ -592,16 +865,18 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                         id="register-name"
                         value={formData.name}
                         onChange={(e) => handleInputChange("name", e.target.value)}
+                        placeholder="Enter your full name"
                         required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="register-age">Age</Label>
+                      <Label htmlFor="register-age">Age (Must be 18+)</Label>
                       <Input
                         id="register-age"
-                        type="number"
+                        type="text"
                         value={formData.age}
                         onChange={(e) => handleInputChange("age", e.target.value)}
+                        placeholder="Enter your age"
                       />
                     </div>
                   </div>
@@ -612,15 +887,19 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                       type="email"
                       value={formData.email}
                       onChange={(e) => handleInputChange("email", e.target.value)}
+                      placeholder="testmail@gmail.com"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="register-phone">Phone Number</Label>
+                    <Label htmlFor="register-phone">Phone Number (10 digits)</Label>
                     <Input
                       id="register-phone"
+                      type="tel"
                       value={formData.phone}
                       onChange={(e) => handleInputChange("phone", e.target.value)}
+                      placeholder="1234567890"
+                      maxLength={10}
                     />
                   </div>
                   <div className="space-y-2">
@@ -633,7 +912,12 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                       required
                     />
                   </div>
-                  {error && <p className="text-sm text-destructive">{error}</p>}
+                  {error && (
+                    <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                      <span className="text-sm text-destructive">{error}</span>
+                    </div>
+                  )}
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Creating Account..." : "Create Account"}
                   </Button>
