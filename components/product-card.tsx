@@ -7,9 +7,10 @@ import type { Product } from "@/types/product"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Star, ShoppingCart } from "lucide-react"
+import { Star, ShoppingCart, BarChart3 } from "lucide-react"
 import { useCart } from "@/context/cart-context"
 import { formatCurrency } from "@/lib/utils"
+import { WishlistButton } from "./wishlist-button"
 
 interface ProductCardProps {
   product: Product
@@ -24,8 +25,18 @@ export function ProductCard({ product }: ProductCardProps) {
     addToCart(product, 1)
   }
 
+  const addToCompare = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const compareList = JSON.parse(localStorage.getItem("compareList") || "[]")
+    if (!compareList.find((item: Product) => item.id === product.id)) {
+      compareList.push(product)
+      localStorage.setItem("compareList", JSON.stringify(compareList))
+    }
+  }
+
   return (
-    <Card className="overflow-hidden group">
+    <Card className="overflow-hidden group relative">
       <Link href={`/products/${product.id}`} className="block">
         <div className="aspect-square overflow-hidden relative">
           <img
@@ -36,7 +47,16 @@ export function ProductCard({ product }: ProductCardProps) {
           {product.discount && (
             <Badge className="absolute top-2 left-2 bg-red-500 hover:bg-red-600">{product.discount}% OFF</Badge>
           )}
+
+          {/* Action buttons overlay */}
+          <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <WishlistButton product={product} size="sm" />
+            <Button variant="secondary" size="sm" onClick={addToCompare}>
+              <BarChart3 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
+
         <CardContent className="p-4">
           <div className="space-y-1">
             <h3 className="font-medium truncate">{product.name}</h3>
@@ -62,6 +82,7 @@ export function ProductCard({ product }: ProductCardProps) {
             </div>
           </div>
         </CardContent>
+
         <CardFooter className="p-4 pt-0">
           <Button variant="secondary" className="w-full" onClick={handleAddToCart} disabled={!product.inStock}>
             <ShoppingCart className="mr-2 h-4 w-4" />

@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { ArrowRight } from "lucide-react"
 import { ProductCard } from "@/components/product-card"
 import { getFeaturedProducts } from "@/lib/products"
+import { RecentlyViewed } from "@/components/recently-viewed"
+import { ProductComparison } from "@/components/product-comparison"
 
 export default function HomePage() {
   const featuredProducts = getFeaturedProducts(4)
@@ -96,6 +98,12 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Recently Viewed */}
+      <RecentlyViewed />
+
+      {/* Product Comparison */}
+      <ProductComparison />
     </div>
   )
 }
