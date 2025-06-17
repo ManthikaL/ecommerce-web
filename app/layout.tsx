@@ -1,6 +1,7 @@
 import type React from "react"
 import { ThemeProvider } from "@/components/theme-provider"
 import { CartProvider } from "@/context/cart-context"
+import { AuthProvider } from "@/context/auth-context"
 import { SiteHeader } from "@/components/site-header"
 import { SiteFooter } from "@/components/site-footer"
 import "@/app/globals.css"
@@ -21,13 +22,15 @@ export default function RootLayout({
       <head />
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <CartProvider>
-            <div className="flex min-h-screen flex-col">
-              <SiteHeader />
-              <main className="flex-1">{children}</main>
-              <SiteFooter />
-            </div>
-          </CartProvider>
+          <AuthProvider>
+            <CartProvider>
+              <div className="flex min-h-screen flex-col">
+                <SiteHeader />
+                <main className="flex-1">{children}</main>
+                <SiteFooter />
+              </div>
+            </CartProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

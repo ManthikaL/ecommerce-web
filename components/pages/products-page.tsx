@@ -1,62 +1,75 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { getAllProducts } from "@/lib/products"
 import { ProductCard } from "@/components/product-card"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Slider } from "@/components/ui/slider"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, SlidersHorizontal, X } from "lucide-react"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { X } from "lucide-react"
+import { FilterSidebar } from "@/components/filter-sidebar"
 import type { Product } from "@/types/product"
 
 export default function ProductsPage() {
+  const searchParams = useSearchParams()
+  const searchQuery = searchParams.get("search") || ""
+
   const allProducts = getAllProducts()
   const [products, setProducts] = useState<Product[]>(allProducts)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [priceRange, setPriceRange] = useState([0, 1000])
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [sortBy, setSortBy] = useState("featured")
+  const [appliedFilters, setAppliedFilters] = useState<any>({})
 
-  const categories = ["Electronics", "Clothing", "Home & Kitchen", "Beauty"]
+  useEffect(() => {
+    filterAndSortProducts()
+  }, [searchQuery, appliedFilters, sortBy])
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    filterProducts()
-  }
-
-  const handleCategoryChange = (category: string) => {
-    setSelectedCategories((prev) =>
-      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category],
-    )
-  }
-
-  const filterProducts = () => {
+  const filterAndSortProducts = () => {
     let filtered = allProducts
 
-    // Filter by search query
+    // Apply search query
     if (searchQuery) {
       filtered = filtered.filter(
         (product) =>
           product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          product.description.toLowerCase().includes(searchQuery.toLowerCase()),
+          product.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          product.category.toLowerCase().includes(searchQuery.toLowerCase()),
       )
     }
 
-    // Filter by price range
-    filtered = filtered.filter((product) => product.price >= priceRange[0] && product.price <= priceRange[1])
-
-    // Filter by categories
-    if (selectedCategories.length > 0) {
-      filtered = filtered.filter((product) => selectedCategories.includes(product.category))
+    // Apply filters
+    if (appliedFilters.priceRange) {
+      filtered = filtered.filter(
+        (product) => product.price >= appliedFilters.priceRange[0] && product.price <= appliedFilters.priceRange[1],
+      )
     }
 
-    // Sort products
+    if (appliedFilters.categories && appliedFilters.categories.length > 0) {
+      filtered = filtered.filter((product) =>
+        appliedFilters.categories.some((cat: string) => product.category.toLowerCase().includes(cat.toLowerCase())),
+      )
+    }
+
+    if (appliedFilters.brands && appliedFilters.brands.length > 0) {
+      filtered = filtered.filter((product) =>
+        appliedFilters.brands.some((brand: string) =>
+          (product.brand || "ShopEase").toLowerCase().includes(brand.toLowerCase()),
+        ),
+      )
+    }
+
+    if (appliedFilters.rating > 0) {
+      filtered = filtered.filter((product) => product.rating >= appliedFilters.rating)
+    }
+
+    if (appliedFilters.inStock) {
+      filtered = filtered.filter((product) => product.inStock)
+    }
+
+    if (appliedFilters.onSale) {
+      filtered = filtered.filter((product) => product.discount && product.discount > 0)
+    }
+
+    // Apply sorting
     switch (sortBy) {
       case "price-low-high":
         filtered = [...filtered].sort((a, b) => a.price - b.price)
@@ -67,6 +80,9 @@ export default function ProductsPage() {
       case "newest":
         filtered = [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         break
+      case "rating":
+        filtered = [...filtered].sort((a, b) => b.rating - a.rating)
+        break
       default:
         // featured - no sorting needed
         break
@@ -75,12 +91,13 @@ export default function ProductsPage() {
     setProducts(filtered)
   }
 
-  const resetFilters = () => {
-    setSearchQuery("")
-    setPriceRange([0, 1000])
-    setSelectedCategories([])
-    setSortBy("featured")
-    setProducts(allProducts)
+  const handleFiltersChange = (filters: any) => {
+    setAppliedFilters(filters)
+  }
+
+  const clearSearch = () => {
+    window.history.replaceState({}, "", "/products")
+    window.location.reload()
   }
 
   return (
@@ -88,69 +105,28 @@ export default function ProductsPage() {
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold tracking-tight">All Products</h1>
-          <p className="text-muted-foreground">Browse our collection of high-quality products</p>
+          <p className="text-muted-foreground">
+            {searchQuery ? `Search results for "${searchQuery}"` : "Browse our collection of high-quality products"}
+          </p>
         </div>
 
+        {searchQuery && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Searching for:</span>
+            <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded">
+              <span className="text-sm font-medium">{searchQuery}</span>
+              <Button variant="ghost" size="sm" onClick={clearSearch} className="h-auto p-1">
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row gap-4 justify-between">
-          <div className="flex gap-2 w-full md:w-auto">
-            <form onSubmit={handleSearch} className="relative flex-1 md:w-[300px]">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search products..."
-                className="pl-8"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </form>
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="icon" className="md:hidden">
-                  <SlidersHorizontal className="h-4 w-4" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left">
-                <SheetHeader>
-                  <SheetTitle>Filters</SheetTitle>
-                </SheetHeader>
-                <div className="flex flex-col gap-6 py-4">
-                  <div className="space-y-4">
-                    <h3 className="font-medium">Price Range</h3>
-                    <Slider
-                      defaultValue={priceRange}
-                      min={0}
-                      max={1000}
-                      step={10}
-                      value={priceRange}
-                      onValueChange={setPriceRange}
-                    />
-                    <div className="flex items-center justify-between">
-                      <span>${priceRange[0]}</span>
-                      <span>${priceRange[1]}</span>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <h3 className="font-medium">Categories</h3>
-                    <div className="space-y-2">
-                      {categories.map((category) => (
-                        <div key={category} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`category-mobile-${category}`}
-                            checked={selectedCategories.includes(category)}
-                            onCheckedChange={() => handleCategoryChange(category)}
-                          />
-                          <Label htmlFor={`category-mobile-${category}`}>{category}</Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <Button onClick={filterProducts}>Apply Filters</Button>
-                  <Button variant="outline" onClick={resetFilters}>
-                    Reset Filters
-                  </Button>
-                </div>
-              </SheetContent>
-            </Sheet>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {products.length} product{products.length !== 1 ? "s" : ""} found
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <Select value={sortBy} onValueChange={setSortBy}>
@@ -161,50 +137,17 @@ export default function ProductsPage() {
                 <SelectItem value="featured">Featured</SelectItem>
                 <SelectItem value="price-low-high">Price: Low to High</SelectItem>
                 <SelectItem value="price-high-low">Price: High to Low</SelectItem>
+                <SelectItem value="rating">Customer Rating</SelectItem>
                 <SelectItem value="newest">Newest</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" onClick={resetFilters} className="hidden md:flex">
-              <X className="mr-2 h-4 w-4" />
-              Reset
-            </Button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {/* Filters - Desktop */}
-          <div className="hidden md:block space-y-6">
-            <div className="space-y-4">
-              <h3 className="font-medium">Price Range</h3>
-              <Slider
-                defaultValue={priceRange}
-                min={0}
-                max={1000}
-                step={10}
-                value={priceRange}
-                onValueChange={setPriceRange}
-              />
-              <div className="flex items-center justify-between">
-                <span>${priceRange[0]}</span>
-                <span>${priceRange[1]}</span>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <h3 className="font-medium">Categories</h3>
-              <div className="space-y-2">
-                {categories.map((category) => (
-                  <div key={category} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`category-${category}`}
-                      checked={selectedCategories.includes(category)}
-                      onCheckedChange={() => handleCategoryChange(category)}
-                    />
-                    <Label htmlFor={`category-${category}`}>{category}</Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <Button onClick={filterProducts}>Apply Filters</Button>
+          <div className="hidden md:block">
+            <FilterSidebar onFiltersChange={handleFiltersChange} />
           </div>
 
           {/* Products Grid */}
@@ -218,9 +161,13 @@ export default function ProductsPage() {
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <h3 className="text-lg font-medium">No products found</h3>
-                <p className="text-muted-foreground mt-1">Try adjusting your search or filter criteria</p>
-                <Button variant="outline" onClick={resetFilters} className="mt-4">
-                  Reset Filters
+                <p className="text-muted-foreground mt-1">
+                  {searchQuery
+                    ? `No products match your search for "${searchQuery}"`
+                    : "Try adjusting your filter criteria"}
+                </p>
+                <Button variant="outline" onClick={clearSearch} className="mt-4">
+                  {searchQuery ? "Clear Search" : "Reset Filters"}
                 </Button>
               </div>
             )}

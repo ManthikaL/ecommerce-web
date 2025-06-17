@@ -2,10 +2,11 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCart } from "@/context/cart-context"
+import { useAuth } from "@/context/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,18 +14,89 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, CreditCard } from "lucide-react"
+import { ArrowLeft, CreditCard, Edit } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import { ShippingMethodSelector } from "@/components/shipping-method-selector"
 
 export default function CheckoutPage() {
   const { cartItems, clearCart } = useCart()
+  const { user } = useAuth()
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    company: "",
+    email: "",
+    phone: "",
+    address: "",
+    apartment: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    country: "United States",
+    sameAsBilling: true,
+    billingFirstName: "",
+    billingLastName: "",
+    billingCompany: "",
+    billingAddress: "",
+    billingApartment: "",
+    billingCity: "",
+    billingState: "",
+    billingZipCode: "",
+    billingCountry: "United States",
+  })
+
+  // Add shipping method state
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState({
+    id: "standard",
+    name: "Standard Shipping",
+    description: "Delivered within business days",
+    price: 5.99,
+    estimatedDays: "5-7 business days",
+    icon: null,
+  })
 
   const subtotal = cartItems.reduce((total, item) => total + item.product.price * item.quantity, 0)
-  const shipping = subtotal > 50 ? 0 : 5.99
+
+  // Update shipping calculation
+  const shipping = subtotal > 50 ? 0 : selectedShippingMethod.price
   const tax = subtotal * 0.07
   const total = subtotal + shipping + tax
+
+  // Auto-fill form with user data
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        firstName: user.shippingAddress.firstName || user.name.split(" ")[0] || "",
+        lastName: user.shippingAddress.lastName || user.name.split(" ").slice(1).join(" ") || "",
+        company: user.shippingAddress.company || "",
+        email: user.email,
+        phone: user.phone,
+        address: user.shippingAddress.street,
+        apartment: user.shippingAddress.apartment || "",
+        city: user.shippingAddress.city,
+        state: user.shippingAddress.state,
+        zipCode: user.shippingAddress.zipCode,
+        country: user.shippingAddress.country,
+        sameAsBilling: true,
+        billingFirstName: user.billingAddress.firstName || user.name.split(" ")[0] || "",
+        billingLastName: user.billingAddress.lastName || user.name.split(" ").slice(1).join(" ") || "",
+        billingCompany: user.billingAddress.company || "",
+        billingAddress: user.billingAddress.street,
+        billingApartment: user.billingAddress.apartment || "",
+        billingCity: user.billingAddress.city,
+        billingState: user.billingAddress.state,
+        billingZipCode: user.billingAddress.zipCode,
+        billingCountry: user.billingAddress.country,
+      })
+    }
+  }, [user])
+
+  const handleInputChange = (field: string, value: string | boolean) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -70,65 +142,187 @@ export default function CheckoutPage() {
         <div className="lg:col-span-2">
           <form onSubmit={handleSubmit}>
             <div className="space-y-6">
-              {/* Shipping Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Shipping Information</CardTitle>
-                  <CardDescription>Enter your shipping details</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="first-name">First Name</Label>
-                      <Input id="first-name" required />
+              {/* User Info Display */}
+              {user && !isEditing && (
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle>Shipping Information</CardTitle>
+                      <CardDescription>Using your saved address</CardDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                      <Edit className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="font-medium">
+                      {user.shippingAddress.firstName} {user.shippingAddress.lastName}
+                    </p>
+                    {user.shippingAddress.company && (
+                      <p className="text-muted-foreground">{user.shippingAddress.company}</p>
+                    )}
+                    <p className="text-muted-foreground">{user.email}</p>
+                    <p className="text-muted-foreground">{user.phone}</p>
+                    <div className="text-muted-foreground">
+                      <p>{user.shippingAddress.street}</p>
+                      {user.shippingAddress.apartment && <p>{user.shippingAddress.apartment}</p>}
+                      <p>
+                        {user.shippingAddress.city}, {user.shippingAddress.state} {user.shippingAddress.zipCode}
+                      </p>
+                      <p>{user.shippingAddress.country}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Shipping Information Form */}
+              {(!user || isEditing) && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Shipping Information</CardTitle>
+                    <CardDescription>
+                      {user ? "Edit your shipping details" : "Enter your shipping details"}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="first-name">First Name</Label>
+                        <Input
+                          id="first-name"
+                          value={formData.firstName}
+                          onChange={(e) => handleInputChange("firstName", e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="last-name">Last Name</Label>
+                        <Input
+                          id="last-name"
+                          value={formData.lastName}
+                          onChange={(e) => handleInputChange("lastName", e.target.value)}
+                          required
+                        />
+                      </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="last-name">Last Name</Label>
-                      <Input id="last-name" required />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="address">Address</Label>
-                    <Input id="address" required />
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="city">City</Label>
-                      <Input id="city" required />
+                      <Label htmlFor="company">Company (Optional)</Label>
+                      <Input
+                        id="company"
+                        value={formData.company}
+                        onChange={(e) => handleInputChange("company", e.target.value)}
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="state">State</Label>
-                      <Select defaultValue="CA">
-                        <SelectTrigger id="state">
-                          <SelectValue placeholder="Select state" />
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => handleInputChange("email", e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        value={formData.phone}
+                        onChange={(e) => handleInputChange("phone", e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="address">Street Address</Label>
+                      <Input
+                        id="address"
+                        value={formData.address}
+                        onChange={(e) => handleInputChange("address", e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="apartment">Apartment, suite, etc. (Optional)</Label>
+                      <Input
+                        id="apartment"
+                        value={formData.apartment}
+                        onChange={(e) => handleInputChange("apartment", e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="city">City</Label>
+                        <Input
+                          id="city"
+                          value={formData.city}
+                          onChange={(e) => handleInputChange("city", e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="state">State</Label>
+                        <Select value={formData.state} onValueChange={(value) => handleInputChange("state", value)}>
+                          <SelectTrigger id="state">
+                            <SelectValue placeholder="Select state" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="AL">Alabama</SelectItem>
+                            <SelectItem value="AK">Alaska</SelectItem>
+                            <SelectItem value="AZ">Arizona</SelectItem>
+                            <SelectItem value="CA">California</SelectItem>
+                            <SelectItem value="CO">Colorado</SelectItem>
+                            <SelectItem value="FL">Florida</SelectItem>
+                            <SelectItem value="NY">New York</SelectItem>
+                            <SelectItem value="TX">Texas</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="zip">ZIP Code</Label>
+                        <Input
+                          id="zip"
+                          value={formData.zipCode}
+                          onChange={(e) => handleInputChange("zipCode", e.target.value)}
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="country">Country</Label>
+                      <Select value={formData.country} onValueChange={(value) => handleInputChange("country", value)}>
+                        <SelectTrigger id="country">
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="AL">Alabama</SelectItem>
-                          <SelectItem value="AK">Alaska</SelectItem>
-                          <SelectItem value="AZ">Arizona</SelectItem>
-                          <SelectItem value="CA">California</SelectItem>
-                          <SelectItem value="CO">Colorado</SelectItem>
-                          <SelectItem value="NY">New York</SelectItem>
-                          <SelectItem value="TX">Texas</SelectItem>
-                          {/* Add more states as needed */}
+                          <SelectItem value="United States">United States</SelectItem>
+                          <SelectItem value="Canada">Canada</SelectItem>
+                          <SelectItem value="United Kingdom">United Kingdom</SelectItem>
+                          <SelectItem value="Australia">Australia</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="zip">ZIP Code</Label>
-                      <Input id="zip" required />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <Input id="phone" type="tel" required />
-                  </div>
-                </CardContent>
-              </Card>
+
+                    {isEditing && (
+                      <div className="flex gap-2 pt-4 border-t">
+                        <Button type="button" onClick={() => setIsEditing(false)}>
+                          Save Changes
+                        </Button>
+                        <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Shipping Method */}
+              <ShippingMethodSelector
+                onMethodChange={setSelectedShippingMethod}
+                defaultMethod={user?.preferences?.defaultShippingMethod || "standard"}
+              />
 
               {/* Payment Information */}
               <Card>
